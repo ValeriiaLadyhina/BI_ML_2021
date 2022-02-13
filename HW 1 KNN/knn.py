@@ -110,7 +110,7 @@ class KNNClassifier:
         n_train = distances.shape[1]
         n_test = distances.shape[0]
         prediction = np.zeros(n_test)
-        for i in range (n_test):
+        for i in range(n_test):
             classes = []
             closest_neighbours = np.argsort(distances)[i][:self.k]
             for j in closest_neighbours:
@@ -134,7 +134,7 @@ class KNNClassifier:
         n_test = distances.shape[0]
         prediction = np.zeros(n_test, np.int)
 
-        for i in range (n_test):
+        for i in range(n_test):
             classes = []
             closest_neighbours = np.argsort(distances)[i][:self.k]
             for j in closest_neighbours:

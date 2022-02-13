@@ -50,10 +50,8 @@ def r_squared(y_pred, y_true):
     r2 - r-squared value
     """
 
-    r2 = 1 - np.sum(np.sqrt(y_true - y_pred))/np.sum(np.sqrt(y_true - np.mean(y_true)))
+    r2 = 1 - np.sum((y_true - y_pred)**2)/np.sum((y_true - np.mean(y_true))**2)
     return r2
-
-
 
 
 def mse(y_pred, y_true):
@@ -66,9 +64,8 @@ def mse(y_pred, y_true):
     mse - mean squared error
     """
 
-    mse = np.sum(np.sqrt(y_true - y_pred)) / len(y_true)
+    mse = np.sum((y_true - y_pred)**2) / len(y_true)
     return mse
-
 
 
 def mae(y_pred, y_true):
