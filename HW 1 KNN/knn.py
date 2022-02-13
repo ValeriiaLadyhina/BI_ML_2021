@@ -8,12 +8,10 @@ class KNNClassifier:
     
     def __init__(self, k=1):
         self.k = k
-    
 
     def fit(self, X, y):
         self.train_X = X
         self.train_y = y
-
 
     def predict(self, X, n_loops=0):
         """
@@ -41,7 +39,6 @@ class KNNClassifier:
         else:
             return self.predict_labels_multiclass(distances)
 
-
     def compute_distances_two_loops(self, X):
         """
         Computes L1 distance from every sample of X to every training sample
@@ -54,12 +51,13 @@ class KNNClassifier:
         distances, np array (num_test_samples, num_train_samples) - array
            with distances between each test and each train sample
         """
-        
-        """
-        YOUR CODE IS HERE
-        """
-        pass
-
+        num_test = X.shape[0]
+        num_train = self.train_X.shape[0]
+        distances_matrix = np.zeros((num_test, num_train))
+        for i in range(num_test):
+            for j in range(num_train):
+                distances_matrix[i][j] = np.sum(np.abs(X[i, :] - self.train_X[j, :]))
+        return distances_matrix
 
     def compute_distances_one_loop(self, X):
         """
@@ -74,11 +72,12 @@ class KNNClassifier:
            with distances between each test and each train sample
         """
 
-        """
-        YOUR CODE IS HERE
-        """
-        pass
-
+        num_test = X.shape[0]
+        num_train = self.train_X.shape[0]
+        distances_matrix = np.zeros((num_test, num_train))
+        for i in range(num_test):
+            distances_matrix[i, :] = np.sum(np.abs(self.train_X - X[i, :]), axis=1)
+        return distances_matrix
 
     def compute_distances_no_loops(self, X):
         """
@@ -93,11 +92,8 @@ class KNNClassifier:
            with distances between each test and each train sample
         """
 
-        """
-        YOUR CODE IS HERE
-        """
-        pass
-
+        distances_matrix = np.sum(np.abs(X[:, None]-self.train_X), axis=-1)
+        return distances_matrix
 
     def predict_labels_binary(self, distances):
         """
@@ -114,12 +110,13 @@ class KNNClassifier:
         n_train = distances.shape[1]
         n_test = distances.shape[0]
         prediction = np.zeros(n_test)
-
-        """
-        YOUR CODE IS HERE
-        """
-        pass
-
+        for i in range (n_test):
+            classes = []
+            closest_neighbours = np.argsort(distances)[i][:self.k]
+            for j in closest_neighbours:
+                classes.append(self.train_y[j])
+            prediction[i] = max(set(classes), key=classes.count)
+        return prediction
 
     def predict_labels_multiclass(self, distances):
         """
@@ -137,7 +134,10 @@ class KNNClassifier:
         n_test = distances.shape[0]
         prediction = np.zeros(n_test, np.int)
 
-        """
-        YOUR CODE IS HERE
-        """
-        pass
+        for i in range (n_test):
+            classes = []
+            closest_neighbours = np.argsort(distances)[i][:self.k]
+            for j in closest_neighbours:
+                classes.append(self.train_y[j])
+            prediction[i] = max(set(classes), key=classes.count)
+        return prediction
