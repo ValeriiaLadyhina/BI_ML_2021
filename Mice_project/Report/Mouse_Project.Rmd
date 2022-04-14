@@ -1,0 +1,180 @@
+---
+title: "Mouse model project"
+author: "Valeriia Ladyhina"
+date: "`r Sys.Date()`"
+output:  
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: lumen
+---
+# Introduction
+*This project...*
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Installation of required packages
+
+```{r warning=FALSE, message=FALSE}
+requiredPackages = c('tidyverse','ggplot2','prettydoc','dplyr','RColorBrewer','car','readxl', 'olsrr', 'multcomp', 'ggcorrplot', 'vegan')
+for(p in requiredPackages){
+  if(!require(p,character.only = TRUE)) install.packages(p, repos = "http://cran.us.r-project.org" )
+  library(p,character.only = TRUE)
+}
+```
+# 1. Dataset description
+*Upload needed data*
+```{r warning=FALSE, message=FALSE}
+data_mice <- read_xls("../data_folder/Data_Cortex_Nuclear.xls")
+```
+*Description of the data*
+
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> The data set consists of the expression levels of 77 proteins/protein modifications that produced detectable signals in the nuclear fraction of cortex.There are 38 control mice and 34 trisomic mice. Control and trisomic groups of mice are further divided on 4 subgroups based on features such as genotype, behavior and treatment. Additional information about this data set can be found [here](https://archive.ics.uci.edu/ml/datasets/Mice+Protein+Expression#) </p>
+```{r echo=TRUE}
+str(data_mice)
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> The data set has MouseID column describing both ID of mouse and ID of experimental repetition that is against tidy-data requirements. Therefore, I will split this column on MouseID and ExperimentID columns. </p>
+```{r echo=TRUE}
+data_mice$ExperimentID <- transpose(str_split(data_mice$MouseID, "_"))[[2]]
+data_mice$MouseID <- transpose(str_split(data_mice$MouseID, "_"))[[1]]
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> There are **`r length(unique(data_mice$MouseID))` mice** in experiment. </p>
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> There are four variables that describe mice: Genotype, Treatment, Behaviour and Class. I will change the type of these columns to factor.  </p>
+```{r echo=TRUE}
+data_mice$Genotype <- as.factor(data_mice$Genotype)
+data_mice$Treatment <- as.factor(data_mice$Treatment)
+data_mice$Behavior<- as.factor(data_mice$Behavior)
+data_mice$class <- as.factor(data_mice$class)
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Column class descibes every mouse based on its genotype, treatment and behavior therefore class column reveals **`r length(levels(data_mice$class))` groups of mice**. </p>
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Mice are distributed among different experimental groups as it is presented in the next table. </p>
+```{r echo=FALSE}
+data_mice%>% group_by(class) %>% summarize(`number_of_mice_in_the_group` = n()/(length(unique(data_mice$ExperimentID))))
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> There are **`r round((length(data_mice[[1]])-nrow(na.omit(data_mice)))/length(data_mice[[1]])*100, digits = 1)`% of experiments that have results for all observations** We have too many NA, therefore we need to replace them by mean values of group. </p>
+```{r echo=FALSE}
+data_mice <- data_mice %>% group_by(class) %>% mutate(across(-c("Treatment", "Behavior", "Genotype", "ExperimentID"), function(x) ifelse(is.na(x), mean(x, na.rm = T), x)))
+```
+
+# 2. In there difference in BDNF_N production among different classes?
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> To find out if there any difference among experimental groups of mice regarding BDNF_N production I will perform one-way ANOVA analysis.</p>
+
+```{r}
+bdnfn_model <- lm(BDNF_N ~ class, data=data_mice)
+bdnfn_model_anova <- Anova(bdnfn_model) 
+bdnfn_model_anova
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Based on results of ANOVA analysis we can say that class is a significant predictor for BDNF_N protein production (F = `r bdnfn_model_anova[[3]][1]`) </p>
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Checks on conditions of applicability: Cook's distances. </p>
+```{r}
+ols_plot_cooksd_bar(bdnfn_model)
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Cook's distances plot shows that there are some outliers, but threshold is too low. [Here](https://stats.stackexchange.com/questions/22161/how-to-read-cooks-distance-plots) I found that the factor can be counted as significantly influential it has to be higher than 1, therefore I make a conclusion that we don't have critically influencial observations. </p>
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Checks on conditions of applicability: Model residues. </p>
+```{r}
+bdnfn_model_diag <- fortify(bdnfn_model)
+ggplot(bdnfn_model_diag, aes(x = class, y = .stdresid)) + geom_boxplot() + ggtitle("Residues plot")
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Plot of residues didn't reveal any patterns in residue distribution, there are some outliers (values that are lying further than 2 sigma),but the median values of residues is more or less similar among different classes and very close to zero. Overall, the distribution of residues can't be called normal, but due to big number of observations and applicability of other contitions we can still use ANOVA analysis. </p>
+
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Post-hoc tests. I will perform Tukey post-hoc test. </p>
+```{r warning=FALSE}
+data_mice_tukey <- glht(bdnfn_model, linfct = mcp(class = 'Tukey'))
+data_mice_tukey_sum<-summary(data_mice_tukey)
+data_mice_tukey_sum
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Post-hoc test revealed some of the goups that are significantly differ in production of BDNF_N. </p>
+```{r}
+MyData <- data.frame(class = levels(factor(data_mice$class)))
+MyData <- data.frame(MyData,
+  predict(bdnfn_model, newdata = MyData, interval = "confidence")
+)
+
+ggplot(data = MyData, aes(x = class, y = fit)) +
+  geom_bar(stat = "identity", aes(fill = class), width = 0.5) +
+  geom_errorbar(aes(ymin = lwr, ymax = upr), width = 0.1) +
+  ggtitle(label = "Tukey post-hoc test")
+```
+
+# 3. Linear model prediction of ERBB4_N production based on data regarding other proteins.
+
+```{r warning=FALSE, fig.4,fig.width = 35,fig.height = 35}
+data_mice <- data_frame(data_mice)    
+data_mice_wo_factors <- data_mice[,-c(1, 79:83)]
+corr <- cor(data_mice_wo_factors)
+p.mat <- cor_pmat(data_mice_wo_factors)
+ggcorrplot(corr,
+           hc.order = TRUE,
+           type = "full",
+           outline.color = "white",
+           lab = TRUE,
+           lab_size = 8,
+           tl.cex = 24,
+           p.mat = p.mat)
+ggcorrplot(corr,
+           type = "full",
+           outline.color = "white",
+           tl.cex = 24,
+           p.mat = p.mat)
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> It seems that there are some positively correlated genes and some negatively correlated genes supporting multicollinearity. </p>
+```{r}
+erbb4n_model <- lm(ERBB4_N ~ ., data = data_mice_wo_factors)
+erbb4n_model_sum <- summary(erbb4n_model)
+erbb4n_model_sum
+```
+```{r}
+ols_plot_cooksd_bar(erbb4n_model)
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> No influential observations </p>
+```{r warning=FALSE, message=FALSE}
+erbb4n_model_diag <- fortify(erbb4n_model)
+ggplot(erbb4n_model_diag, aes(x = .fitted, y = .stdresid)) + 
+  geom_point() + 
+  ggtitle("Residues plot") +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = 2, color = "red") +
+  geom_hline(yintercept = -2, color = "red")
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Residues are centrally located, some of the observations further than 2 sigma away from fitted values. </p>
+```{r message=FALSE}
+qqPlot(erbb4n_model)
+```
+```{r}
+shapiro.test(erbb4n_model_diag$.stdresid)
+```
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> Distribution of residues is different from normal. Protein expression data is not suitable for building of reliable linear model. </p>
+# 4. PCrincipal component analysis
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> In our data set we have multiple observation per mouse, therefore I will reduce number of observation to one per mouse by averaging of these observations. </p>
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+data_mice_sum_id <- data_mice[,-c(79:83)] %>% group_by(MouseID) %>% summarise_all('mean') 
+data_mice_pca <- rda(data_mice_sum_id [, -c(1)], scale = TRUE)
+biplot(mice_pca, scaling = "species", display = "species",  main = "Correlation biplot" )
+```
+``` {r}
+pca_result <- as.data.frame(summary(data_mice_pca)$cont)
+pca_result
+```
+
+<p style="font-family: times, serif; font-size:14pt; font-style:italic; color:black"> First 14 components explain 90% of variability. </p>
+```{r }
+data_mice_pca_3 <- prcomp(data_mice_sum_id[, -c(1)], rank. = 3, scale = T)
+
+```
+
+# 5. 
+
+
+4. Сделайте PCA (15 баллов)
+-- ординацию
+-- постройте графики факторных нагрузок
+-- определите, какой процент объясняет каждая компонента
+-- постройте трехмерный график для первых 3-х компонент
+5. Поиск дифференциальных белков -- творческая часть задания (15 баллов)
+-- можно сделать реанализ из статьи, но предупреждаю сразу, что там машинное обучение
+-- один из вариантов решения - использование методов направленной ординации
+-- можно использовать limma/DeSeq2 (limma проще с осознания логики, также в
+limma и DeSeq2 немного по разному работают статистические тесты)
+Дополнительные баллы по накопительной системе за каждую адекватную идею и её
+реализацию (до 15 баллов).
